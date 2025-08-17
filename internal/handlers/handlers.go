@@ -1,0 +1,316 @@
+package handlers
+
+import (
+	"database/sql"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"personal-finance-tracker/internal/auth"
+	"personal-finance-tracker/internal/models"
+
+	"github.com/gin-gonic/gin"
+)
+
+type Handler struct {
+	db *sql.DB
+}
+
+func NewHandler(db *sql.DB) *Handler {
+	return &Handler{db: db}
+}
+
+func (h *Handler) HealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+}
+
+func (h *Handler) RootHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Personal Finance Tracker API",
+		"version": "1.0.0",
+		"endpoints": gin.H{
+			"health":     "/health or /api/v1/health",
+			"auth":       "/api/v1/auth/{register,login}",
+			"accounts":   "/api/v1/accounts",
+			"categories": "/api/v1/categories", 
+			"transactions": "/api/v1/transactions",
+			"analytics":  "/api/v1/analytics/{summary,spending}",
+		},
+		"documentation": "https://github.com/your-repo/personal-finance-tracker",
+	})
+}
+
+func (h *Handler) AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := auth.ValidateJWT(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", claims.UserID)
+		c.Set("email", claims.Email)
+		c.Next()
+	}
+}
+
+func (h *Handler) Register(c *gin.Context) {
+	var req models.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Add logging for debugging
+	log.Printf("Register request: %+v", req)
+
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		log.Printf("Failed to hash password: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	var userID int
+	query := `INSERT INTO users (email, password_hash, first_name, last_name, created_at, updated_at) 
+			  VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id`
+	
+	err = h.db.QueryRow(query, req.Email, hashedPassword, req.FirstName, req.LastName).Scan(&userID)
+	if err != nil {
+		log.Printf("Failed to create user in database: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	token, err := auth.GenerateJWT(userID, req.Email)
+	if err != nil {
+		log.Printf("Failed to generate JWT: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	user := models.User{
+		ID:        userID,
+		Email:     req.Email,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+	}
+
+	c.JSON(http.StatusCreated, models.AuthResponse{
+		Token: token,
+		User:  user,
+	})
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	query := `SELECT id, email, password_hash, first_name, last_name FROM users WHERE email = $1`
+
+	err := h.db.QueryRow(query, req.Email).Scan(&user.ID, &user.Email, &user.Password, &user.FirstName, &user.LastName)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	if !auth.CheckPasswordHash(req.Password, user.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	token, err := auth.GenerateJWT(user.ID, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.AuthResponse{
+		Token: token,
+		User:  user,
+	})
+}
+
+func (h *Handler) GetProfile(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	var user models.User
+	query := `SELECT id, email, first_name, last_name, created_at, updated_at FROM users WHERE id = $1`
+
+	err := h.db.QueryRow(query, userID).Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *Handler) UpdateProfile(c *gin.Context) {
+	// Implementation for updating user profile
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
+}
+
+func (h *Handler) GetAccounts(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	query := `SELECT id, user_id, name, type, balance, currency, description, created_at, updated_at 
+			  FROM accounts WHERE user_id = $1 ORDER BY created_at DESC`
+
+	rows, err := h.db.Query(query, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch accounts"})
+		return
+	}
+	defer rows.Close()
+
+	var accounts []models.Account
+	for rows.Next() {
+		var account models.Account
+		err := rows.Scan(&account.ID, &account.UserID, &account.Name, &account.Type,
+			&account.Balance, &account.Currency, &account.Description,
+			&account.CreatedAt, &account.UpdatedAt)
+		if err != nil {
+			continue
+		}
+		accounts = append(accounts, account)
+	}
+
+	c.JSON(http.StatusOK, accounts)
+}
+
+func (h *Handler) CreateAccount(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	var account models.Account
+	if err := c.ShouldBindJSON(&account); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	account.UserID = userID
+
+	query := `INSERT INTO accounts (user_id, name, type, balance, currency, description, created_at, updated_at) 
+			  VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, created_at, updated_at`
+
+	err := h.db.QueryRow(query, account.UserID, account.Name, account.Type,
+		account.Balance, account.Currency, account.Description).
+		Scan(&account.ID, &account.CreatedAt, &account.UpdatedAt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create account"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, account)
+}
+
+func (h *Handler) UpdateAccount(c *gin.Context) {
+	// Implementation for updating account
+	c.JSON(http.StatusOK, gin.H{"message": "Account updated"})
+}
+
+func (h *Handler) DeleteAccount(c *gin.Context) {
+	// Implementation for deleting account
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
+}
+
+func (h *Handler) GetCategories(c *gin.Context) {
+	// Implementation for getting categories
+	c.JSON(http.StatusOK, []models.Category{})
+}
+
+func (h *Handler) CreateCategory(c *gin.Context) {
+	// Implementation for creating category
+	c.JSON(http.StatusCreated, gin.H{"message": "Category created"})
+}
+
+func (h *Handler) UpdateCategory(c *gin.Context) {
+	// Implementation for updating category
+	c.JSON(http.StatusOK, gin.H{"message": "Category updated"})
+}
+
+func (h *Handler) DeleteCategory(c *gin.Context) {
+	// Implementation for deleting category
+	c.JSON(http.StatusOK, gin.H{"message": "Category deleted"})
+}
+
+func (h *Handler) GetTransactions(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	// Parse query parameters for filtering
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	query := `SELECT t.id, t.user_id, t.account_id, t.category_id, t.amount, t.type, 
+			  t.description, t.date, t.created_at, t.updated_at
+			  FROM transactions t 
+			  WHERE t.user_id = $1 
+			  ORDER BY t.date DESC, t.created_at DESC 
+			  LIMIT $2 OFFSET $3`
+
+	rows, err := h.db.Query(query, userID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch transactions"})
+		return
+	}
+	defer rows.Close()
+
+	var transactions []models.Transaction
+	for rows.Next() {
+		var transaction models.Transaction
+		err := rows.Scan(&transaction.ID, &transaction.UserID, &transaction.AccountID,
+			&transaction.CategoryID, &transaction.Amount, &transaction.Type,
+			&transaction.Description, &transaction.Date,
+			&transaction.CreatedAt, &transaction.UpdatedAt)
+		if err != nil {
+			continue
+		}
+		transactions = append(transactions, transaction)
+	}
+
+	c.JSON(http.StatusOK, transactions)
+}
+
+func (h *Handler) CreateTransaction(c *gin.Context) {
+	// Implementation for creating transaction
+	c.JSON(http.StatusCreated, gin.H{"message": "Transaction created"})
+}
+
+func (h *Handler) UpdateTransaction(c *gin.Context) {
+	// Implementation for updating transaction
+	c.JSON(http.StatusOK, gin.H{"message": "Transaction updated"})
+}
+
+func (h *Handler) DeleteTransaction(c *gin.Context) {
+	// Implementation for deleting transaction
+	c.JSON(http.StatusOK, gin.H{"message": "Transaction deleted"})
+}
+
+func (h *Handler) BulkCreateTransactions(c *gin.Context) {
+	// Implementation for bulk creating transactions
+	c.JSON(http.StatusCreated, gin.H{"message": "Transactions created"})
+}
+
+func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
+	// Implementation for analytics summary
+	c.JSON(http.StatusOK, models.AnalyticsSummary{})
+}
+
+func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
+	// Implementation for spending analytics
+	c.JSON(http.StatusOK, []models.SpendingByCategory{})
+}
