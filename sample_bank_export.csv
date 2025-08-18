@@ -1,0 +1,17 @@
+Date,Description,Amount,Type,Category
+2024-01-15,Grocery Store Purchase,-85.50,expense,groceries
+2024-01-16,Salary Deposit,3500.00,income,salary
+2024-01-17,Gas Station,-45.20,expense,transport
+2024-01-18,Restaurant Dinner,-67.80,expense,restaurant
+2024-01-19,Electric Bill,-120.00,expense,utilities
+2024-01-20,Amazon Purchase,-39.99,expense,shopping
+2024-01-21,ATM Withdrawal,-100.00,expense,cash
+2024-01-22,Coffee Shop,-4.50,expense,restaurant
+2024-01-23,Pharmacy,-25.30,expense,healthcare
+2024-01-24,Uber Ride,-18.75,expense,transport
+2024-01-25,Freelance Payment,750.00,income,freelance
+2024-01-26,Supermarket,-92.15,expense,groceries
+2024-01-27,Internet Bill,-59.99,expense,utilities
+2024-01-28,Movie Theater,-24.00,expense,entertainment
+2024-01-29,Bank Interest,2.50,income,interest
+2024-01-30,Gym Membership,-49.99,expense,fitness

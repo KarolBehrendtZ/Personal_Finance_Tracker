@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 import requests
 import os
 from datetime import datetime, timedelta
-import psycopg2
 from typing import Dict, List
 
 # Page configuration
@@ -15,17 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Database connection
-@st.cache_resource
-def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=os.getenv('DB_PORT', '5432'),
-        user=os.getenv('DB_USER', 'postgres'),
-        password=os.getenv('DB_PASSWORD', 'postgres'),
-        database=os.getenv('DB_NAME', 'finance_tracker')
-    )
 
 # API configuration
 API_URL = os.getenv('API_URL', 'http://localhost:8080/api/v1')
@@ -163,16 +151,42 @@ def login_page():
                     else:
                         st.error("❌ Registration failed. Email might already be taken or there was a server error.")
 
-def get_data_from_db(query: str, params: tuple = None) -> pd.DataFrame:
-    """Execute SQL query and return DataFrame"""
-    try:
-        conn = get_db_connection()
-        df = pd.read_sql_query(query, conn, params=params)
-        conn.close()
-        return df
-    except Exception as e:
-        st.error(f"Database error: {e}")
-        return pd.DataFrame()
+def get_analytics_summary(start_date: str = None, end_date: str = None) -> Dict:
+    """Get analytics summary from API"""
+    params = {}
+    if start_date:
+        params['start_date'] = start_date
+    if end_date:
+        params['end_date'] = end_date
+    
+    endpoint = "/analytics/summary"
+    if params:
+        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        endpoint += f"?{query_string}"
+    
+    return make_api_request(endpoint)
+
+def get_spending_analytics(start_date: str = None, end_date: str = None) -> List[Dict]:
+    """Get spending analytics from API"""
+    params = {}
+    if start_date:
+        params['start_date'] = start_date
+    if end_date:
+        params['end_date'] = end_date
+    
+    endpoint = "/analytics/spending"
+    if params:
+        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        endpoint += f"?{query_string}"
+    
+    result = make_api_request(endpoint)
+    return result if result else []
+
+def get_transactions_from_api(limit: int = 10) -> List[Dict]:
+    """Get transactions from API"""
+    endpoint = f"/transactions?limit={limit}"
+    result = make_api_request(endpoint)
+    return result if result else []
 
 def dashboard_page():
     """Main dashboard page"""
@@ -209,29 +223,23 @@ def dashboard_page():
     # Overview metrics
     col1, col2, col3, col4 = st.columns(4)
     
-    # Get summary data
-    summary_query = """
-    SELECT 
-        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
-        SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expenses,
-        COUNT(*) as total_transactions
-    FROM transactions 
-    WHERE user_id = %s AND date >= %s AND date <= %s
-    """
-    
     if len(date_range) == 2:
-        summary_df = get_data_from_db(summary_query, (user_id, date_range[0], date_range[1]))
+        # Use API to get analytics summary
+        summary_data = get_analytics_summary(
+            start_date=date_range[0].strftime('%Y-%m-%d'),
+            end_date=date_range[1].strftime('%Y-%m-%d')
+        )
         
-        if not summary_df.empty:
-            total_income = summary_df.iloc[0]['total_income'] or 0
-            total_expenses = summary_df.iloc[0]['total_expenses'] or 0
-            net_income = total_income - total_expenses
-            total_transactions = summary_df.iloc[0]['total_transactions'] or 0
+        if summary_data:
+            total_income = summary_data.get('total_income', 0)
+            total_expenses = summary_data.get('total_expenses', 0)
+            net_income = summary_data.get('net_income', 0)
+            account_balance = summary_data.get('account_balance', 0)
             
             col1.metric("Total Income", f"${total_income:,.2f}")
             col2.metric("Total Expenses", f"${total_expenses:,.2f}")
             col3.metric("Net Income", f"${net_income:,.2f}", delta=f"{net_income:,.2f}")
-            col4.metric("Transactions", f"{total_transactions}")
+            col4.metric("Account Balance", f"${account_balance:,.2f}")
     
     # Charts
     col1, col2 = st.columns(2)
@@ -239,76 +247,68 @@ def dashboard_page():
     with col1:
         st.subheader("Spending by Category")
         
-        category_query = """
-        SELECT c.name, SUM(t.amount) as total
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = %s AND t.type = 'expense' 
-        AND t.date >= %s AND t.date <= %s
-        GROUP BY c.name
-        ORDER BY total DESC
-        """
-        
         if len(date_range) == 2:
-            category_df = get_data_from_db(category_query, (user_id, date_range[0], date_range[1]))
+            # Use API to get spending analytics
+            spending_data = get_spending_analytics(
+                start_date=date_range[0].strftime('%Y-%m-%d'),
+                end_date=date_range[1].strftime('%Y-%m-%d')
+            )
             
-            if not category_df.empty:
-                fig = px.pie(category_df, values='total', names='name')
-                st.plotly_chart(fig, use_container_width=True)
+            if spending_data:
+                # Convert to DataFrame for plotting
+                category_df = pd.DataFrame(spending_data)
+                if not category_df.empty and 'amount' in category_df.columns:
+                    # Filter out zero amounts
+                    category_df = category_df[category_df['amount'] > 0]
+                    if not category_df.empty:
+                        fig = px.pie(category_df, values='amount', names='category_name',
+                                   title="Spending by Category")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No expense data available for the selected period.")
+                else:
+                    st.info("No expense data available for the selected period.")
             else:
                 st.info("No expense data available for the selected period.")
     
     with col2:
         st.subheader("Daily Spending Trend")
-        
-        daily_query = """
-        SELECT date, SUM(amount) as daily_total
-        FROM transactions
-        WHERE user_id = %s AND type = 'expense'
-        AND date >= %s AND date <= %s
-        GROUP BY date
-        ORDER BY date
-        """
-        
-        if len(date_range) == 2:
-            daily_df = get_data_from_db(daily_query, (user_id, date_range[0], date_range[1]))
-            
-            if not daily_df.empty:
-                fig = px.line(daily_df, x='date', y='daily_total')
-                fig.update_layout(xaxis_title="Date", yaxis_title="Amount ($)")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No spending data available for the selected period.")
+        st.info("Daily spending trend feature coming soon!")
     
     # Recent transactions
     st.subheader("Recent Transactions")
     
-    transactions_query = """
-    SELECT t.date, t.description, t.amount, t.type, c.name as category
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id
-    WHERE t.user_id = %s
-    ORDER BY t.date DESC, t.created_at DESC
-    LIMIT 10
-    """
+    # Get recent transactions from API
+    transactions_data = get_transactions_from_api(limit=10)
     
-    transactions_df = get_data_from_db(transactions_query, (user_id,))
-    
-    if not transactions_df.empty:
-        # Format the dataframe for display
-        transactions_df['amount'] = transactions_df['amount'].apply(lambda x: f"${x:,.2f}")
-        st.dataframe(
-            transactions_df,
-            column_config={
-                "date": "Date",
-                "description": "Description",
-                "amount": "Amount",
-                "type": "Type",
-                "category": "Category"
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+    if transactions_data:
+        # Convert to DataFrame for display
+        transactions_df = pd.DataFrame(transactions_data)
+        
+        if not transactions_df.empty:
+            # Format the dataframe for display
+            if 'amount' in transactions_df.columns:
+                transactions_df['amount'] = transactions_df['amount'].apply(lambda x: f"${x:,.2f}")
+            
+            # Select and rename columns for display
+            display_columns = {}
+            if 'date' in transactions_df.columns:
+                display_columns['date'] = 'Date'
+            if 'description' in transactions_df.columns:
+                display_columns['description'] = 'Description'
+            if 'amount' in transactions_df.columns:
+                display_columns['amount'] = 'Amount'
+            if 'type' in transactions_df.columns:
+                display_columns['type'] = 'Type'
+            
+            st.dataframe(
+                transactions_df,
+                column_config=display_columns,
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.info("No transactions found.")
     else:
         st.info("No transactions found.")
 

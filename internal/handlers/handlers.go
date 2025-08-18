@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -30,12 +31,12 @@ func (h *Handler) RootHandler(c *gin.Context) {
 		"message": "Personal Finance Tracker API",
 		"version": "1.0.0",
 		"endpoints": gin.H{
-			"health":     "/health or /api/v1/health",
-			"auth":       "/api/v1/auth/{register,login}",
-			"accounts":   "/api/v1/accounts",
-			"categories": "/api/v1/categories", 
+			"health":       "/health or /api/v1/health",
+			"auth":         "/api/v1/auth/{register,login}",
+			"accounts":     "/api/v1/accounts",
+			"categories":   "/api/v1/categories",
 			"transactions": "/api/v1/transactions",
-			"analytics":  "/api/v1/analytics/{summary,spending}",
+			"analytics":    "/api/v1/analytics/{summary,spending}",
 		},
 		"documentation": "https://github.com/your-repo/personal-finance-tracker",
 	})
@@ -84,7 +85,7 @@ func (h *Handler) Register(c *gin.Context) {
 	var userID int
 	query := `INSERT INTO users (email, password_hash, first_name, last_name, created_at, updated_at) 
 			  VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id`
-	
+
 	err = h.db.QueryRow(query, req.Email, hashedPassword, req.FirstName, req.LastName).Scan(&userID)
 	if err != nil {
 		log.Printf("Failed to create user in database: %v", err)
@@ -306,11 +307,125 @@ func (h *Handler) BulkCreateTransactions(c *gin.Context) {
 }
 
 func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
-	// Implementation for analytics summary
-	c.JSON(http.StatusOK, models.AnalyticsSummary{})
+	userID := c.GetInt("user_id")
+
+	// Get query parameters for date range
+	startDate := c.DefaultQuery("start_date", "")
+	endDate := c.DefaultQuery("end_date", "")
+
+	var summary models.AnalyticsSummary
+
+	query := `
+		SELECT 
+			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+			COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses,
+			COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) as net_income
+		FROM transactions 
+		WHERE user_id = $1`
+
+	params := []interface{}{userID}
+	paramCount := 1
+
+	if startDate != "" {
+		paramCount++
+		query += fmt.Sprintf(" AND date >= $%d", paramCount)
+		params = append(params, startDate)
+	}
+
+	if endDate != "" {
+		paramCount++
+		query += fmt.Sprintf(" AND date <= $%d", paramCount)
+		params = append(params, endDate)
+	}
+
+	err := h.db.QueryRow(query, params...).Scan(&summary.TotalIncome, &summary.TotalExpenses, &summary.NetIncome)
+	if err != nil {
+		log.Printf("Error getting analytics summary: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get analytics summary"})
+		return
+	}
+
+	// Get account balance
+	balanceQuery := `SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE user_id = $1`
+	err = h.db.QueryRow(balanceQuery, userID).Scan(&summary.AccountBalance)
+	if err != nil {
+		log.Printf("Error getting account balance: %v", err)
+		summary.AccountBalance = 0
+	}
+
+	summary.Period = "custom"
+	if startDate == "" && endDate == "" {
+		summary.Period = "all_time"
+	}
+
+	c.JSON(http.StatusOK, summary)
 }
 
 func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
-	// Implementation for spending analytics
-	c.JSON(http.StatusOK, []models.SpendingByCategory{})
+	userID := c.GetInt("user_id")
+
+	// Get query parameters for date range
+	startDate := c.DefaultQuery("start_date", "")
+	endDate := c.DefaultQuery("end_date", "")
+
+	query := `
+		SELECT 
+			c.id,
+			c.name,
+			COALESCE(SUM(t.amount), 0) as total_amount
+		FROM categories c
+		LEFT JOIN transactions t ON c.id = t.category_id AND t.type = 'expense'
+		WHERE c.user_id = $1 AND c.type = 'expense'`
+
+	params := []interface{}{userID}
+	paramCount := 1
+
+	if startDate != "" {
+		paramCount++
+		query += fmt.Sprintf(" AND t.date >= $%d", paramCount)
+		params = append(params, startDate)
+	}
+
+	if endDate != "" {
+		paramCount++
+		query += fmt.Sprintf(" AND t.date <= $%d", paramCount)
+		params = append(params, endDate)
+	}
+
+	query += `
+		GROUP BY c.id, c.name
+		ORDER BY total_amount DESC`
+
+	rows, err := h.db.Query(query, params...)
+	if err != nil {
+		log.Printf("Error getting spending analytics: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get spending analytics"})
+		return
+	}
+	defer rows.Close()
+
+	var analytics []models.SpendingByCategory
+	var totalSpending float64
+
+	for rows.Next() {
+		var spending models.SpendingByCategory
+		err := rows.Scan(&spending.CategoryID, &spending.CategoryName, &spending.Amount)
+		if err != nil {
+			log.Printf("Error scanning spending row: %v", err)
+			continue
+		}
+		analytics = append(analytics, spending)
+		totalSpending += spending.Amount
+	}
+
+	// Calculate percentages
+	for i := range analytics {
+		if totalSpending > 0 {
+			analytics[i].Percentage = (analytics[i].Amount / totalSpending) * 100
+		} else {
+			analytics[i].Percentage = 0
+		}
+	}
+
+	c.JSON(http.StatusOK, analytics)
 }
