@@ -100,6 +100,7 @@ echo ""
 # Watch for changes
 inotifywait -m -r -e modify,create,delete,move \
     --include '\.(go|py|js|html|css|conf)$' \
+    --exclude '/(\.venv|node_modules|__pycache__|dist|build|\.git|\.mypy_cache)(/|$)' \
     cmd/ internal/ dashboard/ python/etl/ docker/ 2>/dev/null | \
 while read path action file; do
     timestamp=$(date '+%H:%M:%S')

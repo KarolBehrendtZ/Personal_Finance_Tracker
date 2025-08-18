@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: finance_db
     environment:
-      POSTGRES_DB: finance_tracker
+      POSTGRES_DB: finance_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:

@@ -157,12 +157,12 @@ case "${1:-help}" in
     "db-reset")
         print_info "Resetting database and regenerating sample data..."
         docker-compose down
-        docker volume rm project_postgres_data 2>/dev/null || true
+        docker volume rm "$(docker-compose config --volumes | grep postgres)" 2>/dev/null || true
         docker-compose up -d postgres
         sleep 5
         docker-compose up -d api
         sleep 5
-        docker-compose run --rm etl_worker python sample_data_generator.py
+        docker-compose run --rm etl_worker python python/etl/sample_data_generator.py
         print_status "Database reset and sample data generated"
         ;;
         
@@ -173,7 +173,7 @@ case "${1:-help}" in
         
     "generate-data")
         print_info "Generating sample data..."
-        docker-compose run --rm etl_worker python sample_data_generator.py
+        docker-compose run --rm etl_worker python python/etl/sample_data_generator.py
         print_status "Sample data generated"
         ;;
         
