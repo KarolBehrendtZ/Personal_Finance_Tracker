@@ -88,5 +88,6 @@ func setupRoutes(router *gin.Engine, h *handlers.Handler) {
 		// Analytics
 		protected.GET("/analytics/summary", h.GetAnalyticsSummary)
 		protected.GET("/analytics/spending", h.GetSpendingAnalytics)
+		protected.GET("/analytics/trends", h.GetSpendingTrends)
 	}
 }
