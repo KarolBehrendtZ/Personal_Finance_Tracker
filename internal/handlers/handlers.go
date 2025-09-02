@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"personal-finance-tracker/internal/auth"
 	"personal-finance-tracker/internal/models"
@@ -72,7 +73,6 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	// Add logging for debugging
 	log.Printf("Register request: %+v", req)
 
 	hashedPassword, err := auth.HashPassword(req.Password)
@@ -162,7 +162,6 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
-	// Implementation for updating user profile
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
 }
 
@@ -220,41 +219,34 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 }
 
 func (h *Handler) UpdateAccount(c *gin.Context) {
-	// Implementation for updating account
 	c.JSON(http.StatusOK, gin.H{"message": "Account updated"})
 }
 
 func (h *Handler) DeleteAccount(c *gin.Context) {
-	// Implementation for deleting account
 	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
 }
 
 func (h *Handler) GetCategories(c *gin.Context) {
-	// Implementation for getting categories
 	c.JSON(http.StatusOK, []models.Category{})
 }
 
 func (h *Handler) CreateCategory(c *gin.Context) {
-	// Implementation for creating category
 	c.JSON(http.StatusCreated, gin.H{"message": "Category created"})
 }
 
 func (h *Handler) UpdateCategory(c *gin.Context) {
-	// Implementation for updating category
 	c.JSON(http.StatusOK, gin.H{"message": "Category updated"})
 }
 
 func (h *Handler) DeleteCategory(c *gin.Context) {
-	// Implementation for deleting category
 	c.JSON(http.StatusOK, gin.H{"message": "Category deleted"})
 }
 
 func (h *Handler) GetTransactions(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Parse query parameters for filtering
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", models.Pagination.DefaultLimit))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", models.Pagination.DefaultOffset))
 
 	query := `SELECT t.id, t.user_id, t.account_id, t.category_id, t.amount, t.type, 
 			  t.description, t.date, t.created_at, t.updated_at
@@ -287,29 +279,24 @@ func (h *Handler) GetTransactions(c *gin.Context) {
 }
 
 func (h *Handler) CreateTransaction(c *gin.Context) {
-	// Implementation for creating transaction
 	c.JSON(http.StatusCreated, gin.H{"message": "Transaction created"})
 }
 
 func (h *Handler) UpdateTransaction(c *gin.Context) {
-	// Implementation for updating transaction
 	c.JSON(http.StatusOK, gin.H{"message": "Transaction updated"})
 }
 
 func (h *Handler) DeleteTransaction(c *gin.Context) {
-	// Implementation for deleting transaction
 	c.JSON(http.StatusOK, gin.H{"message": "Transaction deleted"})
 }
 
 func (h *Handler) BulkCreateTransactions(c *gin.Context) {
-	// Implementation for bulk creating transactions
 	c.JSON(http.StatusCreated, gin.H{"message": "Transactions created"})
 }
 
 func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Get query parameters for date range
 	startDate := c.DefaultQuery("start_date", "")
 	endDate := c.DefaultQuery("end_date", "")
 
@@ -345,7 +332,6 @@ func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 		return
 	}
 
-	// Get account balance
 	balanceQuery := `SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE user_id = $1`
 	err = h.db.QueryRow(balanceQuery, userID).Scan(&summary.AccountBalance)
 	if err != nil {
@@ -364,7 +350,6 @@ func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Get query parameters for date range
 	startDate := c.DefaultQuery("start_date", "")
 	endDate := c.DefaultQuery("end_date", "")
 
@@ -418,7 +403,6 @@ func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 		totalSpending += spending.Amount
 	}
 
-	// Calculate percentages
 	for i := range analytics {
 		if totalSpending > 0 {
 			analytics[i].Percentage = (analytics[i].Amount / totalSpending) * 100
@@ -428,4 +412,218 @@ func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, analytics)
+}
+
+func (h *Handler) GetSpendingTrends(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	var req models.SpendingTrendsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Date == "" {
+		req.Date = time.Now().Format("2006-01-02")
+	}
+
+	trends, err := h.calculateSpendingTrends(userID, req.Period, req.Date)
+	if err != nil {
+		log.Printf("Error calculating spending trends: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate spending trends"})
+		return
+	}
+
+	response := models.SpendingTrendsResponse{
+		Period: req.Period,
+		Date:   req.Date,
+		Trends: trends,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([]models.SpendingTrend, error) {
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return nil, err
+	}
+
+	var startDate, endDate time.Time
+	var prevStartDate, prevEndDate time.Time
+
+	// Calculate date ranges based on period
+	switch period {
+	case "day":
+		startDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+		endDate = startDate.AddDate(0, 0, 1)
+		prevStartDate = startDate.AddDate(0, 0, -1)
+		prevEndDate = startDate
+	case "week":
+		// Start of week (Monday)
+		weekday := int(date.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		} // Sunday = 7
+		startDate = date.AddDate(0, 0, -(weekday - 1))
+		startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+		endDate = startDate.AddDate(0, 0, 7)
+		prevStartDate = startDate.AddDate(0, 0, -7)
+		prevEndDate = startDate
+	case "month":
+		startDate = time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+		endDate = startDate.AddDate(0, 1, 0)
+		prevStartDate = startDate.AddDate(0, -1, 0)
+		prevEndDate = startDate
+	default:
+		return nil, fmt.Errorf("invalid period: %s", period)
+	}
+
+	// Get current period spending by category
+	currentQuery := `
+		SELECT c.id, c.name, COALESCE(SUM(t.amount), 0) as amount
+		FROM categories c
+		LEFT JOIN transactions t ON c.id = t.category_id 
+			AND t.user_id = $1 
+			AND t.type = 'expense'
+			AND t.date >= $2 
+			AND t.date < $3
+		WHERE c.user_id = $1 AND c.type = 'expense'
+		GROUP BY c.id, c.name
+		ORDER BY amount DESC
+	`
+
+	currentRows, err := h.db.Query(currentQuery, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer currentRows.Close()
+
+	// Get previous period spending for comparison
+	prevQuery := `
+		SELECT c.id, COALESCE(SUM(t.amount), 0) as amount
+		FROM categories c
+		LEFT JOIN transactions t ON c.id = t.category_id 
+			AND t.user_id = $1 
+			AND t.type = 'expense'
+			AND t.date >= $2 
+			AND t.date < $3
+		WHERE c.user_id = $1 AND c.type = 'expense'
+		GROUP BY c.id
+	`
+
+	prevRows, err := h.db.Query(prevQuery, userID, prevStartDate, prevEndDate)
+	if err != nil {
+		return nil, err
+	}
+	defer prevRows.Close()
+
+	// Store previous period data
+	prevSpending := make(map[int]float64)
+	for prevRows.Next() {
+		var categoryID int
+		var amount float64
+		if err := prevRows.Scan(&categoryID, &amount); err != nil {
+			continue
+		}
+		prevSpending[categoryID] = amount
+	}
+
+	// Calculate trends and predictions
+	var trends []models.SpendingTrend
+	for currentRows.Next() {
+		var trend models.SpendingTrend
+		if err := currentRows.Scan(&trend.CategoryID, &trend.CategoryName, &trend.CurrentSpend); err != nil {
+			continue
+		}
+
+		// Get historical average for prediction
+		historicalAvg, err := h.getHistoricalAverage(userID, trend.CategoryID, period)
+		if err != nil {
+			historicalAvg = trend.CurrentSpend // fallback
+		}
+
+		// Calculate prediction based on trend
+		prevAmount := prevSpending[trend.CategoryID]
+		prediction := h.calculatePrediction(trend.CurrentSpend, prevAmount, historicalAvg, period)
+
+		trend.PredictedSpend = prediction
+
+		// Calculate trend direction and change
+		if prevAmount > 0 {
+			change := ((trend.CurrentSpend - prevAmount) / prevAmount) * 100
+			trend.ChangePercent = change
+
+			if change > models.TrendLimits.UpThreshold {
+				trend.TrendDirection = models.TrendDirections.Up
+			} else if change < models.TrendLimits.DownThreshold {
+				trend.TrendDirection = models.TrendDirections.Down
+			} else {
+				trend.TrendDirection = models.TrendDirections.Stable
+			}
+		} else {
+			trend.TrendDirection = models.TrendDirections.New
+			trend.ChangePercent = 0
+		}
+
+		trends = append(trends, trend)
+	}
+
+	return trends, nil
+}
+
+// getHistoricalAverage calculates average spending for a category over last periods
+func (h *Handler) getHistoricalAverage(userID, categoryID int, period string) (float64, error) {
+	var days int
+	switch period {
+	case "day":
+		days = models.HistoricalDays.DayLookback
+	case "week":
+		days = models.HistoricalDays.WeekLookback
+	case "month":
+		days = models.HistoricalDays.MonthLookback
+	}
+
+	query := `
+		SELECT COALESCE(AVG(amount), 0)
+		FROM transactions 
+		WHERE user_id = $1 
+			AND category_id = $2 
+			AND type = 'expense'
+			AND date >= NOW() - ($3 * INTERVAL '1 day')
+	`
+
+	var avg float64
+	err := h.db.QueryRow(query, userID, categoryID, days).Scan(&avg)
+	return avg, err
+}
+
+// calculatePrediction uses simple trending algorithm
+func (h *Handler) calculatePrediction(current, previous, historical float64, period string) float64 {
+	// Weight factors
+	currentWeight := models.PredictionConfig.Current
+	trendWeight := models.PredictionConfig.Trend
+	historicalWeight := models.PredictionConfig.Historical
+
+	conservativeEstimateFactor := models.PredictionSettings.ConservativeEstimate
+
+	// Calculate trend factor
+	var trendFactor float64
+	if previous > 0 {
+		trendFactor = current - previous
+	} else {
+		trendFactor = 0
+	}
+
+	// Simple prediction: weighted average with trend
+	prediction := (current * currentWeight) +
+		(trendFactor * trendWeight) +
+		(historical * historicalWeight)
+
+	// Ensure prediction is not negative
+	if prediction < 0 {
+		prediction = current * conservativeEstimateFactor // conservative estimate
+	}
+
+	return prediction
 }

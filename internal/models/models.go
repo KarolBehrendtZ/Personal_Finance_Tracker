@@ -106,3 +106,31 @@ type SpendingByCategory struct {
 	Amount       float64 `json:"amount"`
 	Percentage   float64 `json:"percentage"`
 }
+
+// Daily/Weekly/Monthly Spending Trends
+type SpendingTrend struct {
+	CategoryID     int     `json:"category_id"`
+	CategoryName   string  `json:"category_name"`
+	CurrentSpend   float64 `json:"current_spend"`
+	PredictedSpend float64 `json:"predicted_spend"`
+	TrendDirection string  `json:"trend_direction"` // up, down, stable
+	ChangePercent  float64 `json:"change_percent"`
+}
+
+type SpendingTrendsRequest struct {
+	Period string `form:"period" binding:"required"` // day, week, month
+	Date   string `form:"date"`                      // optional specific date, defaults to current
+}
+
+type SpendingTrendsResponse struct {
+	Period string          `json:"period"`
+	Date   string          `json:"date"`
+	Trends []SpendingTrend `json:"trends"`
+}
+
+type PredictionData struct {
+	CategoryID    int     `json:"category_id"`
+	HistoricalAvg float64 `json:"historical_avg"`
+	RecentTrend   float64 `json:"recent_trend"`
+	Seasonality   float64 `json:"seasonality"`
+}
