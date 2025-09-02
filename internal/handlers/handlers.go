@@ -561,7 +561,12 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 			} else {
 				trend.TrendDirection = models.TrendDirections.Stable
 			}
+		} else if prevAmount == 0 && trend.CurrentSpend > 0 {
+			// Going from 0 to some spending = infinite increase = upward trend
+			trend.TrendDirection = models.TrendDirections.Up
+			trend.ChangePercent = 999.9 // Represent infinite increase with high value
 		} else {
+			// Both previous and current are 0, or truly new category
 			trend.TrendDirection = models.TrendDirections.New
 			trend.ChangePercent = 0
 		}

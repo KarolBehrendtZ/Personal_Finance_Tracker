@@ -8,6 +8,16 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 from constants import TrendDirections, TREND_INDICATORS
 
+# Validate constants on startup to ensure backend sync
+try:
+    from constants import validate_trend_constants
+    # Validation happens automatically on import, but we can add explicit check here if needed
+except ImportError:
+    st.error("Failed to import trend direction validation")
+except ValueError as e:
+    st.error(f"Trend direction constants validation failed: {e}")
+    st.stop()
+
 # Page configuration
 st.set_page_config(
     page_title="Personal Finance Tracker",
@@ -394,6 +404,8 @@ def show_spending_trends_tab():
                 )
                 
             with col3:
+                # These comparisons use TrendDirections constants that MUST match Go backend
+                # Backend constants are defined in internal/models/trend_direction.go
                 trending_up = len(df[df['trend_direction'] == TrendDirections.UP])
                 trending_down = len(df[df['trend_direction'] == TrendDirections.DOWN])
                 
