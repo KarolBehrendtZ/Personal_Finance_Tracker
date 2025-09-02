@@ -49,13 +49,13 @@ var HistoricalDays = HistoricalPeriods{
 }
 
 type PaginationDefaults struct {
-	DefaultLimit  string
-	DefaultOffset string
+	DefaultLimit  int
+	DefaultOffset int
 }
 
 var Pagination = PaginationDefaults{
-	DefaultLimit:  "20",
-	DefaultOffset: "0",
+	DefaultLimit:  20,
+	DefaultOffset: 0,
 }
 
 type PredictionFactors struct {
