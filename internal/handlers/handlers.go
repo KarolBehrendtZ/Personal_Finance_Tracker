@@ -73,7 +73,6 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	// Add logging for debugging
 	log.Printf("Register request: %+v", req)
 
 	hashedPassword, err := auth.HashPassword(req.Password)
@@ -163,7 +162,6 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 func (h *Handler) UpdateProfile(c *gin.Context) {
-	// Implementation for updating user profile
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated"})
 }
 
@@ -221,41 +219,34 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 }
 
 func (h *Handler) UpdateAccount(c *gin.Context) {
-	// Implementation for updating account
 	c.JSON(http.StatusOK, gin.H{"message": "Account updated"})
 }
 
 func (h *Handler) DeleteAccount(c *gin.Context) {
-	// Implementation for deleting account
 	c.JSON(http.StatusOK, gin.H{"message": "Account deleted"})
 }
 
 func (h *Handler) GetCategories(c *gin.Context) {
-	// Implementation for getting categories
 	c.JSON(http.StatusOK, []models.Category{})
 }
 
 func (h *Handler) CreateCategory(c *gin.Context) {
-	// Implementation for creating category
 	c.JSON(http.StatusCreated, gin.H{"message": "Category created"})
 }
 
 func (h *Handler) UpdateCategory(c *gin.Context) {
-	// Implementation for updating category
 	c.JSON(http.StatusOK, gin.H{"message": "Category updated"})
 }
 
 func (h *Handler) DeleteCategory(c *gin.Context) {
-	// Implementation for deleting category
 	c.JSON(http.StatusOK, gin.H{"message": "Category deleted"})
 }
 
 func (h *Handler) GetTransactions(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Parse query parameters for filtering
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", models.Pagination.DefaultLimit))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", models.Pagination.DefaultOffset))
 
 	query := `SELECT t.id, t.user_id, t.account_id, t.category_id, t.amount, t.type, 
 			  t.description, t.date, t.created_at, t.updated_at
@@ -288,29 +279,24 @@ func (h *Handler) GetTransactions(c *gin.Context) {
 }
 
 func (h *Handler) CreateTransaction(c *gin.Context) {
-	// Implementation for creating transaction
 	c.JSON(http.StatusCreated, gin.H{"message": "Transaction created"})
 }
 
 func (h *Handler) UpdateTransaction(c *gin.Context) {
-	// Implementation for updating transaction
 	c.JSON(http.StatusOK, gin.H{"message": "Transaction updated"})
 }
 
 func (h *Handler) DeleteTransaction(c *gin.Context) {
-	// Implementation for deleting transaction
 	c.JSON(http.StatusOK, gin.H{"message": "Transaction deleted"})
 }
 
 func (h *Handler) BulkCreateTransactions(c *gin.Context) {
-	// Implementation for bulk creating transactions
 	c.JSON(http.StatusCreated, gin.H{"message": "Transactions created"})
 }
 
 func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Get query parameters for date range
 	startDate := c.DefaultQuery("start_date", "")
 	endDate := c.DefaultQuery("end_date", "")
 
@@ -346,7 +332,6 @@ func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 		return
 	}
 
-	// Get account balance
 	balanceQuery := `SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE user_id = $1`
 	err = h.db.QueryRow(balanceQuery, userID).Scan(&summary.AccountBalance)
 	if err != nil {
@@ -365,7 +350,6 @@ func (h *Handler) GetAnalyticsSummary(c *gin.Context) {
 func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	// Get query parameters for date range
 	startDate := c.DefaultQuery("start_date", "")
 	endDate := c.DefaultQuery("end_date", "")
 
@@ -419,7 +403,6 @@ func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 		totalSpending += spending.Amount
 	}
 
-	// Calculate percentages
 	for i := range analytics {
 		if totalSpending > 0 {
 			analytics[i].Percentage = (analytics[i].Amount / totalSpending) * 100
@@ -431,7 +414,6 @@ func (h *Handler) GetSpendingAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, analytics)
 }
 
-// GetSpendingTrends returns spending trends with predictions
 func (h *Handler) GetSpendingTrends(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
@@ -441,7 +423,6 @@ func (h *Handler) GetSpendingTrends(c *gin.Context) {
 		return
 	}
 
-	// Default to current date if not provided
 	if req.Date == "" {
 		req.Date = time.Now().Format("2006-01-02")
 	}
@@ -462,7 +443,6 @@ func (h *Handler) GetSpendingTrends(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// calculateSpendingTrends calculates current spending and predictions
 func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([]models.SpendingTrend, error) {
 	date, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -574,15 +554,15 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 			change := ((trend.CurrentSpend - prevAmount) / prevAmount) * 100
 			trend.ChangePercent = change
 
-			if change > 10 {
-				trend.TrendDirection = "up"
-			} else if change < -10 {
-				trend.TrendDirection = "down"
+			if change > models.TrendLimits.UpThreshold {
+				trend.TrendDirection = models.TrendDirections.Up
+			} else if change < models.TrendLimits.DownThreshold {
+				trend.TrendDirection = models.TrendDirections.Down
 			} else {
-				trend.TrendDirection = "stable"
+				trend.TrendDirection = models.TrendDirections.Stable
 			}
 		} else {
-			trend.TrendDirection = "new"
+			trend.TrendDirection = models.TrendDirections.New
 			trend.ChangePercent = 0
 		}
 
@@ -597,11 +577,11 @@ func (h *Handler) getHistoricalAverage(userID, categoryID int, period string) (f
 	var days int
 	switch period {
 	case "day":
-		days = 30 // last 30 days
+		days = models.HistoricalDays.DayLookback
 	case "week":
-		days = 84 // last 12 weeks
+		days = models.HistoricalDays.WeekLookback
 	case "month":
-		days = 365 // last 12 months
+		days = models.HistoricalDays.MonthLookback
 	}
 
 	query := `
@@ -610,22 +590,22 @@ func (h *Handler) getHistoricalAverage(userID, categoryID int, period string) (f
 		WHERE user_id = $1 
 			AND category_id = $2 
 			AND type = 'expense'
-			AND date >= NOW() - INTERVAL '%d days'
+			AND date >= NOW() - ($3 * INTERVAL '1 day')
 	`
 
 	var avg float64
-	err := h.db.QueryRow(fmt.Sprintf(query, days), userID, categoryID).Scan(&avg)
+	err := h.db.QueryRow(query, userID, categoryID, days).Scan(&avg)
 	return avg, err
 }
 
 // calculatePrediction uses simple trending algorithm
 func (h *Handler) calculatePrediction(current, previous, historical float64, period string) float64 {
 	// Weight factors
-	const (
-		currentWeight    = 0.4
-		trendWeight      = 0.4
-		historicalWeight = 0.2
-	)
+	currentWeight := models.PredictionConfig.Current
+	trendWeight := models.PredictionConfig.Trend
+	historicalWeight := models.PredictionConfig.Historical
+
+	conservativeEstimateFactor := models.PredictionSettings.ConservativeEstimate
 
 	// Calculate trend factor
 	var trendFactor float64
@@ -642,7 +622,7 @@ func (h *Handler) calculatePrediction(current, previous, historical float64, per
 
 	// Ensure prediction is not negative
 	if prediction < 0 {
-		prediction = current * 0.8 // conservative estimate
+		prediction = current * conservativeEstimateFactor // conservative estimate
 	}
 
 	return prediction

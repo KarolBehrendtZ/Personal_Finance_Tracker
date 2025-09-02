@@ -6,6 +6,7 @@ import requests
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List
+from constants import TrendDirections, TREND_INDICATORS
 
 # Page configuration
 st.set_page_config(
@@ -321,16 +322,8 @@ def show_spending_trends_tab():
             display_df['predicted_spend'] = display_df['predicted_spend'].apply(lambda x: f"${x:,.2f}")
             display_df['change_percent'] = display_df['change_percent'].apply(lambda x: f"{x:+.1f}%")
             
-            # Add trend indicators
-            trend_indicators = {
-                'up': '📈 ↗️',
-                'down': '📉 ↘️', 
-                'stable': '➡️',
-                'new': '🆕'
-            }
-            display_df['trend'] = display_df['trend_direction'].map(trend_indicators)
+            display_df['trend'] = display_df['trend_direction'].map(TREND_INDICATORS)
             
-            # Reorder and rename columns
             display_df = display_df[['category_name', 'current_spend', 'predicted_spend', 'change_percent', 'trend']]
             display_df.columns = ['Category', f'Current {period.title()}', f'Predicted Next {period.title()}', 'Change %', 'Trend']
             
@@ -401,8 +394,8 @@ def show_spending_trends_tab():
                 )
                 
             with col3:
-                trending_up = len(df[df['trend_direction'] == 'up'])
-                trending_down = len(df[df['trend_direction'] == 'down'])
+                trending_up = len(df[df['trend_direction'] == TrendDirections.UP])
+                trending_down = len(df[df['trend_direction'] == TrendDirections.DOWN])
                 
                 if trending_up > trending_down:
                     trend_summary = "📈 Mostly Increasing"
