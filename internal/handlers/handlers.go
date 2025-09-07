@@ -245,8 +245,8 @@ func (h *Handler) DeleteCategory(c *gin.Context) {
 func (h *Handler) GetTransactions(c *gin.Context) {
 	userID := c.GetInt("user_id")
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", models.Pagination.DefaultLimit))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", models.Pagination.DefaultOffset))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(models.Pagination.DefaultLimit)))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", strconv.Itoa(models.Pagination.DefaultOffset)))
 
 	query := `SELECT t.id, t.user_id, t.account_id, t.category_id, t.amount, t.type, 
 			  t.description, t.date, t.created_at, t.updated_at
@@ -452,7 +452,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 	var startDate, endDate time.Time
 	var prevStartDate, prevEndDate time.Time
 
-	// Calculate date ranges based on period
 	switch period {
 	case "day":
 		startDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
@@ -460,11 +459,10 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 		prevStartDate = startDate.AddDate(0, 0, -1)
 		prevEndDate = startDate
 	case "week":
-		// Start of week (Monday)
 		weekday := int(date.Weekday())
 		if weekday == 0 {
 			weekday = 7
-		} // Sunday = 7
+		}
 		startDate = date.AddDate(0, 0, -(weekday - 1))
 		startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
 		endDate = startDate.AddDate(0, 0, 7)
@@ -479,7 +477,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 		return nil, fmt.Errorf("invalid period: %s", period)
 	}
 
-	// Get current period spending by category
 	currentQuery := `
 		SELECT c.id, c.name, COALESCE(SUM(t.amount), 0) as amount
 		FROM categories c
@@ -499,7 +496,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 	}
 	defer currentRows.Close()
 
-	// Get previous period spending for comparison
 	prevQuery := `
 		SELECT c.id, COALESCE(SUM(t.amount), 0) as amount
 		FROM categories c
@@ -518,7 +514,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 	}
 	defer prevRows.Close()
 
-	// Store previous period data
 	prevSpending := make(map[int]float64)
 	for prevRows.Next() {
 		var categoryID int
@@ -529,7 +524,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 		prevSpending[categoryID] = amount
 	}
 
-	// Calculate trends and predictions
 	var trends []models.SpendingTrend
 	for currentRows.Next() {
 		var trend models.SpendingTrend
@@ -537,19 +531,16 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 			continue
 		}
 
-		// Get historical average for prediction
 		historicalAvg, err := h.getHistoricalAverage(userID, trend.CategoryID, period)
 		if err != nil {
-			historicalAvg = trend.CurrentSpend // fallback
+			historicalAvg = trend.CurrentSpend
 		}
 
-		// Calculate prediction based on trend
 		prevAmount := prevSpending[trend.CategoryID]
 		prediction := h.calculatePrediction(trend.CurrentSpend, prevAmount, historicalAvg, period)
 
 		trend.PredictedSpend = prediction
 
-		// Calculate trend direction and change
 		if prevAmount > 0 {
 			change := ((trend.CurrentSpend - prevAmount) / prevAmount) * 100
 			trend.ChangePercent = change
@@ -562,11 +553,9 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 				trend.TrendDirection = models.TrendDirections.Stable
 			}
 		} else if prevAmount == 0 && trend.CurrentSpend > 0 {
-			// Going from 0 to some spending = infinite increase = upward trend
 			trend.TrendDirection = models.TrendDirections.Up
-			trend.ChangePercent = 999.9 // Represent infinite increase with high value
+			trend.ChangePercent = 999.9
 		} else {
-			// Both previous and current are 0, or truly new category
 			trend.TrendDirection = models.TrendDirections.New
 			trend.ChangePercent = 0
 		}
@@ -577,7 +566,6 @@ func (h *Handler) calculateSpendingTrends(userID int, period, dateStr string) ([
 	return trends, nil
 }
 
-// getHistoricalAverage calculates average spending for a category over last periods
 func (h *Handler) getHistoricalAverage(userID, categoryID int, period string) (float64, error) {
 	var days int
 	switch period {
@@ -603,16 +591,13 @@ func (h *Handler) getHistoricalAverage(userID, categoryID int, period string) (f
 	return avg, err
 }
 
-// calculatePrediction uses simple trending algorithm
 func (h *Handler) calculatePrediction(current, previous, historical float64, period string) float64 {
-	// Weight factors
 	currentWeight := models.PredictionConfig.Current
 	trendWeight := models.PredictionConfig.Trend
 	historicalWeight := models.PredictionConfig.Historical
 
 	conservativeEstimateFactor := models.PredictionSettings.ConservativeEstimate
 
-	// Calculate trend factor
 	var trendFactor float64
 	if previous > 0 {
 		trendFactor = current - previous
@@ -620,14 +605,12 @@ func (h *Handler) calculatePrediction(current, previous, historical float64, per
 		trendFactor = 0
 	}
 
-	// Simple prediction: weighted average with trend
 	prediction := (current * currentWeight) +
 		(trendFactor * trendWeight) +
 		(historical * historicalWeight)
 
-	// Ensure prediction is not negative
 	if prediction < 0 {
-		prediction = current * conservativeEstimateFactor // conservative estimate
+		prediction = current * conservativeEstimateFactor
 	}
 
 	return prediction

@@ -23,7 +23,6 @@ class TransactionImporter:
         try:
             df = pd.read_csv(file_path)
             
-            # Standardize column names (adjust based on your bank's CSV format)
             column_mapping = {
                 'Date': 'date',
                 'Description': 'description',
@@ -34,12 +33,10 @@ class TransactionImporter:
             
             df = df.rename(columns=column_mapping)
             
-            # Data cleaning
             df['date'] = pd.to_datetime(df['date']).dt.date
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
             df = df.dropna(subset=['date', 'amount'])
             
-            # Determine transaction type based on amount
             df['type'] = df['amount'].apply(lambda x: 'income' if x > 0 else 'expense')
             df['amount'] = df['amount'].abs()
             
@@ -48,12 +45,10 @@ class TransactionImporter:
             
             for _, row in df.iterrows():
                 try:
-                    # Get or create category
                     category_id = self._get_or_create_category(
                         cursor, user_id, row.get('category', 'Other'), row['type']
                     )
                     
-                    # Insert transaction
                     cursor.execute("""
                         INSERT INTO transactions (user_id, account_id, category_id, amount, type, description, date, created_at, updated_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
@@ -88,7 +83,6 @@ class TransactionImporter:
         if result:
             return result[0]
         
-        # Create new category
         cursor.execute("""
             INSERT INTO categories (user_id, name, type, created_at, updated_at)
             VALUES (%s, %s, %s, NOW(), NOW()) RETURNING id
@@ -112,7 +106,6 @@ class TransactionImporter:
         updated_count = 0
         
         try:
-            # Get uncategorized transactions
             cursor.execute("""
                 SELECT t.id, t.description, c.name as current_category
                 FROM transactions t
@@ -127,12 +120,10 @@ class TransactionImporter:
                 
                 for category, keywords in categorization_rules.items():
                     if any(keyword in description_lower for keyword in keywords):
-                        # Get or create category
                         category_id = self._get_or_create_category(
                             cursor, user_id, category.title(), 'expense'
                         )
                         
-                        # Update transaction
                         cursor.execute(
                             "UPDATE transactions SET category_id = %s, updated_at = NOW() WHERE id = %s",
                             (category_id, trans_id)
@@ -157,7 +148,6 @@ class TransactionImporter:
 if __name__ == "__main__":
     importer = TransactionImporter()
     
-    # Example usage
     importer.import_csv('bank_export.csv', user_id=1, account_id=1)
     importer.auto_categorize_transactions(user_id=1)
     

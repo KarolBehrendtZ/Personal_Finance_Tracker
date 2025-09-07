@@ -12,7 +12,7 @@ import (
 func getJWTSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "your-secret-key" // fallback for development
+		secret = "your-secret-key"
 	}
 	return []byte(secret)
 }

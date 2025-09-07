@@ -106,14 +106,12 @@ class SpendingAnalyzer:
         if df.empty:
             return {'trends': {}, 'summary': {}}
         
-        # Pivot data for analysis
         pivot_df = df.pivot(index='month', columns='category', values='total_amount').fillna(0)
         
         trends = {}
         for category in pivot_df.columns:
             series = pivot_df[category]
             if len(series) > 1:
-                # Calculate trend (positive = increasing, negative = decreasing)
                 trend = np.polyfit(range(len(series)), series, 1)[0]
                 trends[category] = {
                     'trend': float(trend),
@@ -249,7 +247,6 @@ class SpendingAnalyzer:
 if __name__ == "__main__":
     analyzer = SpendingAnalyzer()
     
-    # Example usage
     report = analyzer.generate_spending_report(user_id=1, output_file='spending_report.json')
     print("Unusual spending detected:", analyzer.detect_unusual_spending(user_id=1))
     

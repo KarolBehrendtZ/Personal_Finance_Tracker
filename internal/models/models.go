@@ -18,7 +18,7 @@ type Account struct {
 	ID          int       `json:"id" db:"id"`
 	UserID      int       `json:"user_id" db:"user_id"`
 	Name        string    `json:"name" db:"name"`
-	Type        string    `json:"type" db:"type"` // checking, savings, credit, investment
+	Type        string    `json:"type" db:"type"`
 	Balance     float64   `json:"balance" db:"balance"`
 	Currency    string    `json:"currency" db:"currency"`
 	Description string    `json:"description" db:"description"`
@@ -30,7 +30,7 @@ type Category struct {
 	ID        int       `json:"id" db:"id"`
 	UserID    int       `json:"user_id" db:"user_id"`
 	Name      string    `json:"name" db:"name"`
-	Type      string    `json:"type" db:"type"` // income, expense
+	Type      string    `json:"type" db:"type"`
 	Color     string    `json:"color" db:"color"`
 	Icon      string    `json:"icon" db:"icon"`
 	ParentID  *int      `json:"parent_id" db:"parent_id"`
@@ -44,7 +44,7 @@ type Transaction struct {
 	AccountID   int       `json:"account_id" db:"account_id"`
 	CategoryID  int       `json:"category_id" db:"category_id"`
 	Amount      float64   `json:"amount" db:"amount"`
-	Type        string    `json:"type" db:"type"` // income, expense, transfer
+	Type        string    `json:"type" db:"type"`
 	Description string    `json:"description" db:"description"`
 	Date        time.Time `json:"date" db:"date"`
 	Tags        []string  `json:"tags" db:"tags"`
@@ -57,14 +57,13 @@ type BudgetRule struct {
 	UserID     int        `json:"user_id" db:"user_id"`
 	CategoryID int        `json:"category_id" db:"category_id"`
 	Amount     float64    `json:"amount" db:"amount"`
-	Period     string     `json:"period" db:"period"` // monthly, weekly, yearly
+	Period     string     `json:"period" db:"period"`
 	StartDate  time.Time  `json:"start_date" db:"start_date"`
 	EndDate    *time.Time `json:"end_date" db:"end_date"`
 	CreatedAt  time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at" db:"updated_at"`
 }
 
-// Request/Response DTOs
 type RegisterRequest struct {
 	Email     string `json:"email" binding:"required,email"`
 	Password  string `json:"password" binding:"required,min=6"`
@@ -107,19 +106,18 @@ type SpendingByCategory struct {
 	Percentage   float64 `json:"percentage"`
 }
 
-// Daily/Weekly/Monthly Spending Trends
 type SpendingTrend struct {
 	CategoryID     int     `json:"category_id"`
 	CategoryName   string  `json:"category_name"`
 	CurrentSpend   float64 `json:"current_spend"`
 	PredictedSpend float64 `json:"predicted_spend"`
-	TrendDirection string  `json:"trend_direction"` // up, down, stable
+	TrendDirection string  `json:"trend_direction"`
 	ChangePercent  float64 `json:"change_percent"`
 }
 
 type SpendingTrendsRequest struct {
-	Period string `form:"period" binding:"required"` // day, week, month
-	Date   string `form:"date"`                      // optional specific date, defaults to current
+	Period string `form:"period" binding:"required"`
+	Date   string `form:"date"`
 }
 
 type SpendingTrendsResponse struct {
