@@ -1,20 +1,15 @@
 #!/bin/bash
 
-# Selective Build Script for Personal Finance Tracker
-# Allows building specific services or all services
-
 set -e
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
 print_status() {
     echo -e "${GREEN}✅ $1${NC}"
 }
@@ -32,10 +27,8 @@ print_header() {
     echo -e "${PURPLE}$(echo $1 | sed 's/./=/g')${NC}"
 }
 
-# Available services
 SERVICES=("api" "dashboard" "etl_worker" "nginx" "postgres")
 
-# Function to show usage
 show_usage() {
     print_header "🔧 Build Script Usage"
     echo ""
@@ -52,7 +45,6 @@ show_usage() {
     echo "  $0                 # Show this help"
 }
 
-# Function to build specific services
 build_services() {
     local services_to_build=("$@")
     
@@ -71,7 +63,6 @@ build_services() {
     print_status "All requested services built successfully!"
 }
 
-# Function to validate service names
 validate_services() {
     local services_to_check=("$@")
     local invalid_services=()
@@ -82,7 +73,7 @@ validate_services() {
         fi
     done
     
-    if [ ${#invalid_services[@]} -gt 0 ]; then
+    if  [ ${#invalid_services[@]} -ne 0 ]; then
         print_error "Invalid service(s): ${invalid_services[*]}"
         echo ""
         show_usage
@@ -90,13 +81,11 @@ validate_services() {
     fi
 }
 
-# Main logic
 if [ $# -eq 0 ]; then
     show_usage
     exit 0
 fi
 
-# Check if 'all' was specified
 if [ "$1" = "all" ]; then
     print_info "Building all services..."
     if docker-compose build; then
@@ -109,13 +98,12 @@ elif [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     show_usage
     exit 0
 else
-    # Validate service names
     validate_services "$@"
     
-    # Build specified services
     build_services "$@"
 fi
 
 print_info "Build process completed!"
 echo ""
-print_info "💡 Tip: Use 'docker-compose up -d [service]' to restart specific services"
+print_info "Tip: Use docker-compose up -d [service] to restart specific services"
+

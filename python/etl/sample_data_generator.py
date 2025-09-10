@@ -19,7 +19,6 @@ class SampleDataGenerator:
             database=os.getenv('DB_NAME', 'finance_db')
         )
         
-        # Sample data definitions
         self.sample_users = [
             {"email": "john.doe@example.com", "first_name": "John", "last_name": "Doe", "password": "password123"},
             {"email": "jane.smith@example.com", "first_name": "Jane", "last_name": "Smith", "password": "password123"},
@@ -29,27 +28,26 @@ class SampleDataGenerator:
         self.account_types = ["checking", "savings", "credit", "investment"]
         
         self.expense_categories = [
-            {"name": "Groceries", "color": "#FF6B6B", "icon": "🛒"},
-            {"name": "Transportation", "color": "#4ECDC4", "icon": "🚗"},
-            {"name": "Entertainment", "color": "#45B7D1", "icon": "🎬"},
-            {"name": "Utilities", "color": "#96CEB4", "icon": "⚡"},
-            {"name": "Healthcare", "color": "#FFEAA7", "icon": "🏥"},
-            {"name": "Shopping", "color": "#DDA0DD", "icon": "🛍️"},
-            {"name": "Restaurants", "color": "#98D8C8", "icon": "🍽️"},
-            {"name": "Gas", "color": "#F7DC6F", "icon": "⛽"},
-            {"name": "Insurance", "color": "#AED6F1", "icon": "🛡️"},
-            {"name": "Other", "color": "#D5DBDB", "icon": "📋"},
+            {"name": "Groceries", "color": "#ff6b6b"},
+            {"name": "Transportation", "color": "#4ecdc4"},
+            {"name": "Entertainment", "color": "#45b7d1"},
+            {"name": "Utilities", "color": "#f9ca24"},
+            {"name": "Healthcare", "color": "#6c5ce7"},
+            {"name": "Shopping", "color": "#a29bfe"},
+            {"name": "Restaurants", "color": "#fd79a8"},
+            {"name": "Gas", "color": "#fdcb6e"},
+            {"name": "Insurance", "color": "#e17055"},
+            {"name": "Other", "color": "#74b9ff"}
         ]
         
         self.income_categories = [
-            {"name": "Salary", "color": "#58D68D", "icon": "💼"},
-            {"name": "Freelance", "color": "#85C1E9", "icon": "💻"},
-            {"name": "Investment", "color": "#F8C471", "icon": "📈"},
-            {"name": "Gift", "color": "#BB8FCE", "icon": "🎁"},
-            {"name": "Other Income", "color": "#82E0AA", "icon": "💰"},
+            {"name": "Salary", "color": "#00b894"},
+            {"name": "Freelance", "color": "#00cec9"},
+            {"name": "Investment", "color": "#55a3ff"},
+            {"name": "Gift", "color": "#ff7675"},
+            {"name": "Other Income", "color": "#81ecec"}
         ]
         
-        # Transaction templates for realistic data
         self.transaction_templates = {
             "Groceries": [
                 "Walmart Supercenter", "Target", "Costco", "Kroger", "Safeway",
@@ -107,7 +105,6 @@ class SampleDataGenerator:
         
         for user_data in self.sample_users:
             try:
-                # Hash password using bcrypt (same as Go backend)
                 password_bytes = user_data["password"].encode('utf-8')
                 hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
                 hashed_password = hashed.decode('utf-8')
@@ -180,10 +177,8 @@ class SampleDataGenerator:
         for user_id in user_ids:
             user_categories[user_id] = {"expense": [], "income": []}
             
-            # Create expense categories
             for category_data in self.expense_categories:
                 try:
-                    # Check if category already exists
                     cursor.execute("""
                         SELECT id FROM categories 
                         WHERE user_id = %s AND name = %s AND type = %s
@@ -192,24 +187,21 @@ class SampleDataGenerator:
                     existing = cursor.fetchone()
                     if existing:
                         category_id = existing[0]
-                        # Update existing category
                         cursor.execute("""
                             UPDATE categories 
-                            SET color = %s, icon = %s, updated_at = NOW()
+                            SET color = %s, updated_at = NOW()
                             WHERE id = %s
-                        """, (category_data["color"], category_data["icon"], category_id))
+                        """, (category_data["color"], category_id))
                     else:
-                        # Insert new category
                         cursor.execute("""
-                            INSERT INTO categories (user_id, name, type, color, icon, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                            INSERT INTO categories (user_id, name, type, color, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, NOW(), NOW())
                             RETURNING id
                         """, (
                             user_id,
                             category_data["name"],
                             "expense",
-                            category_data["color"],
-                            category_data["icon"]
+                            category_data["color"]
                         ))
                         category_id = cursor.fetchone()[0]
                     
@@ -218,10 +210,8 @@ class SampleDataGenerator:
                 except Exception as e:
                     logger.error(f"Error creating expense category for user {user_id}: {e}")
             
-            # Create income categories
             for category_data in self.income_categories:
                 try:
-                    # Check if category already exists
                     cursor.execute("""
                         SELECT id FROM categories 
                         WHERE user_id = %s AND name = %s AND type = %s
@@ -230,24 +220,21 @@ class SampleDataGenerator:
                     existing = cursor.fetchone()
                     if existing:
                         category_id = existing[0]
-                        # Update existing category
                         cursor.execute("""
                             UPDATE categories 
-                            SET color = %s, icon = %s, updated_at = NOW()
+                            SET color = %s, updated_at = NOW()
                             WHERE id = %s
-                        """, (category_data["color"], category_data["icon"], category_id))
+                        """, (category_data["color"], category_id))
                     else:
-                        # Insert new category
                         cursor.execute("""
-                            INSERT INTO categories (user_id, name, type, color, icon, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                            INSERT INTO categories (user_id, name, type, color, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, NOW(), NOW())
                             RETURNING id
                         """, (
                             user_id,
                             category_data["name"],
                             "income",
-                            category_data["color"],
-                            category_data["icon"]
+                            category_data["color"]
                         ))
                         category_id = cursor.fetchone()[0]
                     
@@ -268,48 +255,39 @@ class SampleDataGenerator:
         cursor = self.conn.cursor()
         created_count = 0
         
-        # Get user-account mapping
         cursor.execute("SELECT id, user_id FROM accounts")
         account_user_map = {account_id: user_id for account_id, user_id in cursor.fetchall()}
         
         for _ in range(num_transactions):
             try:
-                # Random account and corresponding user
                 account_id = random.choice(account_ids)
                 user_id = account_user_map[account_id]
                 
-                # Random transaction type (80% expense, 20% income)
                 trans_type = "expense" if random.random() < 0.8 else "income"
                 
-                # Random category for this user and type
                 if user_categories[user_id][trans_type]:
                     category_id = random.choice(user_categories[user_id][trans_type])
                     
-                    # Get category name for transaction description
                     cursor.execute("SELECT name FROM categories WHERE id = %s", (category_id,))
                     category_name = cursor.fetchone()[0]
                     
-                    # Generate realistic description
                     if category_name in self.transaction_templates:
                         description = random.choice(self.transaction_templates[category_name])
                     else:
                         description = f"{category_name} Transaction"
                     
-                    # Generate amount based on type
                     if trans_type == "expense":
                         amount = round(random.uniform(5, 500), 2)
-                    else:  # income
+                    else:
                         if category_name == "Salary":
                             amount = round(random.uniform(2000, 8000), 2)
                         else:
                             amount = round(random.uniform(50, 2000), 2)
                     
-                    # Random date within last 6 months
                     start_date = datetime.now() - timedelta(days=180)
                     random_days = random.randint(0, 180)
                     transaction_date = start_date + timedelta(days=random_days)
                     
-                    # Insert transaction
                     cursor.execute("""
                         INSERT INTO transactions (user_id, account_id, category_id, amount, type, description, date, created_at, updated_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
@@ -348,12 +326,11 @@ class SampleDataGenerator:
         for user_id in user_ids:
             for category_id in user_categories[user_id]["expense"]:
                 try:
-                    # Get category name
                     cursor.execute("SELECT name FROM categories WHERE id = %s", (category_id,))
                     category_name = cursor.fetchone()[0]
                     
                     if category_name in budget_amounts:
-                        amount = budget_amounts[category_name] * random.uniform(0.7, 1.3)  # Add some variation
+                        amount = budget_amounts[category_name] * random.uniform(0.7, 1.3)
                         
                         cursor.execute("""
                             INSERT INTO budget_rules (user_id, category_id, amount, period, start_date, created_at, updated_at)
@@ -379,23 +356,18 @@ class SampleDataGenerator:
         logger.info("🚀 Starting sample data generation...")
         
         try:
-            # Generate users
             logger.info("📝 Creating sample users...")
             user_ids = self.generate_users()
             
-            # Generate accounts
             logger.info("🏦 Creating sample accounts...")
             account_ids = self.generate_accounts(user_ids)
             
-            # Generate categories
             logger.info("📋 Creating sample categories...")
             user_categories = self.generate_categories(user_ids)
             
-            # Generate transactions
             logger.info("💰 Creating sample transactions...")
             transaction_count = self.generate_transactions(user_ids, account_ids, user_categories, num_transactions)
             
-            # Generate budget rules
             logger.info("📊 Creating sample budget rules...")
             budget_count = self.generate_budget_rules(user_ids, user_categories)
             
@@ -434,10 +406,7 @@ class SampleDataGenerator:
 if __name__ == "__main__":
     generator = SampleDataGenerator()
     
-    # Uncomment the line below to clear all data first (use with caution!)
-    # generator.clear_all_data()
     
-    # Generate sample data
     result = generator.generate_all_sample_data(num_transactions=1000)
     
     if result:

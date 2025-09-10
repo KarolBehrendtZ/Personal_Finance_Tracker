@@ -8,17 +8,14 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 from constants import TrendDirections, TREND_INDICATORS
 
-# Validate constants on startup to ensure backend sync
 try:
     from constants import validate_trend_constants
-    # Validation happens automatically on import, but we can add explicit check here if needed
 except ImportError:
     st.error("Failed to import trend direction validation")
 except ValueError as e:
     st.error(f"Trend direction constants validation failed: {e}")
     st.stop()
 
-# Page configuration
 st.set_page_config(
     page_title="Personal Finance Tracker",
     page_icon="💰",
@@ -26,10 +23,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# API configuration
 API_URL = os.getenv('API_URL', 'http://localhost:8080/api/v1')
 
-# Authentication state
 if 'token' not in st.session_state:
     st.session_state.token = None
 if 'user' not in st.session_state:
@@ -169,7 +164,6 @@ def dashboard_page():
     """Main dashboard page"""
     st.title("💰 Personal Finance Dashboard")
     
-    # Sidebar
     with st.sidebar:
         st.write(f"Welcome, {st.session_state.user['first_name']}!")
         
@@ -185,14 +179,12 @@ def dashboard_page():
         
         st.divider()
         
-        # Date range selector
         date_range = st.date_input(
             "Select Date Range",
             value=[datetime.now() - timedelta(days=30), datetime.now()],
             max_value=datetime.now()
         )
     
-    # Main navigation tabs
     tab1, tab2, tab3 = st.tabs(["📊 Overview", "📈 Spending Trends", "💳 Transactions"])
     
     with tab1:
@@ -206,7 +198,6 @@ def dashboard_page():
 
 def show_overview_tab(date_range):
     """Show overview dashboard"""
-    # Overview metrics
     col1, col2, col3, col4 = st.columns(4)
     
     if len(date_range) == 2:
@@ -226,7 +217,6 @@ def show_overview_tab(date_range):
             col3.metric("Net Income", f"${net_income:,.2f}", delta=f"{net_income:,.2f}")
             col4.metric("Account Balance", f"${account_balance:,.2f}")
     
-    # Charts
     col1, col2 = st.columns(2)
     
     with col1:
@@ -282,26 +272,24 @@ def show_spending_trends_tab():
     """Show spending trends with predictions"""
     st.subheader("📈 Daily Spending Trends & Predictions")
     
-    # Period selector
     col1, col2 = st.columns([1, 2])
     
     with col1:
         period = st.selectbox(
             "Time Period",
             options=["day", "week", "month"],
-            index=1,  # default to week
+            index=1,
             format_func=lambda x: x.title()
         )
     
     with col2:
-        # Date selector based on period
         if period == "day":
             selected_date = st.date_input("Select Day", value=datetime.now().date())
             date_str = selected_date.strftime('%Y-%m-%d')
         elif period == "week":
             selected_date = st.date_input("Select Week (any day in the week)", value=datetime.now().date())
             date_str = selected_date.strftime('%Y-%m-%d')
-        else:  # month
+        else:
             col_month, col_year = st.columns(2)
             with col_month:
                 month = st.selectbox("Month", range(1, 13), index=datetime.now().month - 1,
@@ -310,23 +298,18 @@ def show_spending_trends_tab():
                 year = st.selectbox("Year", range(2020, 2030), index=datetime.now().year - 2020)
             date_str = f"{year}-{month:02d}-01"
     
-    # Get trends data
     trends_data = get_spending_trends(period, date_str)
     
     if trends_data and 'trends' in trends_data:
         trends = trends_data['trends']
         
         if trends:
-            # Create DataFrame
             df = pd.DataFrame(trends)
             
-            # Display summary
             st.info(f"Showing trends for {period} of {trends_data['date']}")
             
-            # Create the main trends table
             st.subheader("Spending Trends Table")
             
-            # Format the data for display
             display_df = df.copy()
             display_df['current_spend'] = display_df['current_spend'].apply(lambda x: f"${x:,.2f}")
             display_df['predicted_spend'] = display_df['predicted_spend'].apply(lambda x: f"${x:,.2f}")
@@ -337,20 +320,17 @@ def show_spending_trends_tab():
             display_df = display_df[['category_name', 'current_spend', 'predicted_spend', 'change_percent', 'trend']]
             display_df.columns = ['Category', f'Current {period.title()}', f'Predicted Next {period.title()}', 'Change %', 'Trend']
             
-            # Display table with styling
             st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True
             )
             
-            # Visualizations
             col1, col2 = st.columns(2)
             
             with col1:
                 st.subheader("Current vs Predicted Spending")
                 
-                # Create comparison chart
                 chart_df = df[['category_name', 'current_spend', 'predicted_spend']].head(10)
                 
                 fig = go.Figure(data=[
@@ -369,7 +349,6 @@ def show_spending_trends_tab():
             with col2:
                 st.subheader("Trend Direction Distribution")
                 
-                # Count trends
                 trend_counts = df['trend_direction'].value_counts()
                 
                 fig = px.pie(
@@ -380,10 +359,8 @@ def show_spending_trends_tab():
                 
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Insights section
             st.subheader("💡 Insights")
             
-            # Calculate insights
             total_current = df['current_spend'].sum()
             total_predicted = df['predicted_spend'].sum()
             change = ((total_predicted - total_current) / total_current * 100) if total_current > 0 else 0
@@ -404,8 +381,6 @@ def show_spending_trends_tab():
                 )
                 
             with col3:
-                # These comparisons use TrendDirections constants that MUST match Go backend
-                # Backend constants are defined in internal/models/trend_direction.go
                 trending_up = len(df[df['trend_direction'] == TrendDirections.UP])
                 trending_down = len(df[df['trend_direction'] == TrendDirections.DOWN])
                 
@@ -418,12 +393,11 @@ def show_spending_trends_tab():
                 
                 st.metric("Overall Trend", trend_summary)
             
-            # Top categories insights
             if not df.empty:
                 biggest_increase = df.loc[df['change_percent'].idxmax()]
                 biggest_decrease = df.loc[df['change_percent'].idxmin()]
                 
-                st.markdown("### 🔍 Key Changes")
+                st.markdown("### 📊 Key Insights")
                 
                 col1, col2 = st.columns(2)
                 
@@ -453,11 +427,9 @@ def show_transactions_tab(date_range):
         if transactions and len(transactions) > 0:
             df_transactions = pd.DataFrame(transactions)
             
-            # Format the data
             df_transactions['amount'] = df_transactions['amount'].apply(lambda x: f"${x:.2f}")
             df_transactions['date'] = pd.to_datetime(df_transactions['date']).dt.strftime('%Y-%m-%d')
             
-            # Display table
             st.dataframe(
                 df_transactions[['date', 'description', 'amount', 'type']],
                 use_container_width=True,

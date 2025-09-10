@@ -1,5 +1,4 @@
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: finance_db
@@ -20,7 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Go API Backend
   api:
     build:
       context: .
@@ -46,7 +44,6 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
-  # Python ETL Worker
   etl_worker:
     build:
       context: .
@@ -68,9 +65,8 @@ services:
       - ./python:/app/python
       - ./logs:/app/logs
     restart: unless-stopped
-    command: ["python", "-c", "import time; time.sleep(3600)"]  # Keep container running
+    command: ["python", "-c", "import time; time.sleep(3600)"]
 
-  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: finance_proxy
@@ -86,7 +82,6 @@ services:
       - finance_network
     restart: unless-stopped
 
-  # Optional: Streamlit Dashboard
   dashboard:
     build:
       context: .
