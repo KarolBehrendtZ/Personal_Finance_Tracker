@@ -1,4 +1,4 @@
-
+#!/bin/bash
 
 set -e
 
@@ -73,7 +73,7 @@ validate_services() {
         fi
     done
     
-    if [ ${
+    if  [ ${#invalid_services[@]} -ne 0 ]; then
         print_error "Invalid service(s): ${invalid_services[*]}"
         echo ""
         show_usage

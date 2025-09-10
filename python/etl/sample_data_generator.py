@@ -189,20 +189,19 @@ class SampleDataGenerator:
                         category_id = existing[0]
                         cursor.execute("""
                             UPDATE categories 
-                            SET color = %s, icon = %s, updated_at = NOW()
+                            SET color = %s, updated_at = NOW()
                             WHERE id = %s
-                        """, (category_data["color"], category_data["icon"], category_id))
+                        """, (category_data["color"], category_id))
                     else:
                         cursor.execute("""
-                            INSERT INTO categories (user_id, name, type, color, icon, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                            INSERT INTO categories (user_id, name, type, color, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, NOW(), NOW())
                             RETURNING id
                         """, (
                             user_id,
                             category_data["name"],
                             "expense",
-                            category_data["color"],
-                            category_data["icon"]
+                            category_data["color"]
                         ))
                         category_id = cursor.fetchone()[0]
                     
@@ -223,20 +222,19 @@ class SampleDataGenerator:
                         category_id = existing[0]
                         cursor.execute("""
                             UPDATE categories 
-                            SET color = %s, icon = %s, updated_at = NOW()
+                            SET color = %s, updated_at = NOW()
                             WHERE id = %s
-                        """, (category_data["color"], category_data["icon"], category_id))
+                        """, (category_data["color"], category_id))
                     else:
                         cursor.execute("""
-                            INSERT INTO categories (user_id, name, type, color, icon, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                            INSERT INTO categories (user_id, name, type, color, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, NOW(), NOW())
                             RETURNING id
                         """, (
                             user_id,
                             category_data["name"],
                             "income",
-                            category_data["color"],
-                            category_data["icon"]
+                            category_data["color"]
                         ))
                         category_id = cursor.fetchone()[0]
                     
